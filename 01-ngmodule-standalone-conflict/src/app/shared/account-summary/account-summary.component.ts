@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { AuthService, UserSession } from '../auth.service';
 
 @Component({
+  standalone: false,
   selector: 'app-account-summary',
   template: `
     <div class="account-summary">

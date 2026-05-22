@@ -10,6 +10,7 @@ interface Transaction {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-transaction-list',
   template: `
     <div class="transaction-list">
