@@ -1,0 +1,106 @@
+TASK: Pre-Migration TypeScript Strict Mode Audit
+
+CONTEXT:
+We are planning to migrate our Angular application from version 14 to version 20.
+Angular 20 requires TypeScript 5.4+, which has significantly stricter type checking
+than our current TypeScript 4.7.4 setup.
+
+Our current tsconfig.json has "strict": false, which has allowed implicit 'any' types
+throughout the codebase. We need to fix these issues BEFORE attempting the Angular upgrade.
+
+OBJECTIVE:
+Perform a comprehensive TypeScript strict mode audit and fix all type-related issues
+to ensure a smooth migration to Angular 20.
+
+TASKS:
+
+1. BASELINE ASSESSMENT
+   - Run build with current settings (strict: false) and confirm it passes
+   - Enable "strict": true in tsconfig.json
+   - Run build and capture ALL TypeScript errors
+   - Generate a report categorizing errors by type:
+     * Missing parameter type annotations
+     * Missing return type annotations
+     * Implicit any in callbacks (map, filter, reduce, forEach)
+     * Missing @Input() type annotations
+     * Index signature issues
+     * Null/undefined handling issues
+
+2. PRIORITY FIXING (Complete in this order)
+
+   A. Fix @Input() decorator types (CRITICAL)
+      - Add explicit types to all @Input() properties
+      - Components cannot be instantiated without these
+
+   B. Fix function signatures (HIGH)
+      - Add return types to all public methods
+      - Add parameter types to all functions
+      - Focus on service methods first, then components
+
+   C. Fix array callback parameters (HIGH)
+      - Add types to all .map() callbacks
+      - Add types to all .filter() callbacks
+      - Add types to all .reduce() callbacks
+      - Add types to all .forEach() callbacks
+
+   D. Fix index signatures (MEDIUM)
+      - Add proper types for Object.entries() usage
+      - Add proper types for Object.keys() usage
+      - Create interfaces for dynamic property access
+
+   E. Add null safety (MEDIUM)
+      - Add null checks before property access
+      - Use optional chaining where appropriate
+      - Add type guards where needed
+
+3. INTERFACE CREATION
+   - Create proper interfaces for all data structures
+   - Ensure interfaces are exported and reused
+   - Replace 'any[]' with properly typed arrays
+   - Replace 'any' with specific types or unknown
+
+4. VERIFICATION
+   - Run build with "strict": true and verify 0 errors
+   - Run tests and ensure all pass
+   - Check that no 'any' types remain (use: npx tsc --noEmit --strict)
+   - Verify no @ts-ignore or @ts-expect-error comments were added
+
+5. DOCUMENTATION
+   - Create a summary report showing:
+     * Total errors fixed
+     * Categories of errors
+     * Files modified
+     * Time spent
+     * Any remaining technical debt
+
+FILES TO FOCUS ON:
+- src/app/services/customer-data.service.ts (Highest priority - 32+ errors)
+- src/app/components/transaction-formatter.component.ts (15+ errors)
+- src/app/models/account-type.enum.ts (4+ errors)
+- tsconfig.json (Enable strict mode)
+
+SUCCESS CRITERIA:
+✓ Build passes with "strict": true in tsconfig.json
+✓ Zero TypeScript errors
+✓ All tests pass
+✓ No 'any' types in the codebase (except where explicitly justified)
+✓ No @ts-ignore or @ts-expect-error comments
+✓ Comprehensive type coverage report generated
+
+CONSTRAINTS:
+- Do NOT modify business logic
+- Do NOT refactor functionality
+- ONLY fix type-related issues
+- Do NOT upgrade any packages yet
+- Keep all existing tests passing
+
+ESTIMATED TIME: 6-8 hours
+
+DELIVERABLES:
+1. All TypeScript files with proper type annotations
+2. Clean build with strict: true enabled
+3. Summary report of changes made
+4. Type coverage metrics (before/after)
+
+This work MUST be completed and merged BEFORE we attempt the Angular 14 → 20 upgrade.
+Failing to do this pre-work will result in 26+ hours of blocked migration time.

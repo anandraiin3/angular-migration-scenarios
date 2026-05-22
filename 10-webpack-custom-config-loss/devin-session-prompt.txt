@@ -1,0 +1,179 @@
+DEVIN SESSION: Webpack Custom Configuration Migration with Equivalence Verification
+
+CONTEXT:
+You are migrating an Angular 14 application to Angular 17. The application currently uses @angular-builders/custom-webpack with a custom-webpack.config.js that handles critical infrastructure concerns. Angular 17 uses ESBuild instead of Webpack, so the custom configuration will be silently ignored after migration.
+
+CRITICAL REQUIREMENT:
+The custom webpack configuration handles production-critical functionality:
+1. Corporate CA certificate injection for internal HTTPS APIs
+2. Build-time secret injection from CI/CD environment variables
+3. Custom module resolution for internal package registry
+4. Custom loaders for legacy code compatibility
+
+If this configuration is lost, the build will succeed but the application will fail catastrophically in production.
+
+YOUR TASK:
+Create an equivalent build configuration for Angular 17 that preserves all functionality from the custom webpack configuration, then verify equivalence before migrating.
+
+DELIVERABLES:
+
+1. AUDIT CURRENT CONFIGURATION
+   - Read and document every customization in custom-webpack.config.js
+   - Identify what each customization does and why it's needed
+   - List all environment variables and build-time injections
+   - Document expected build outputs and runtime behavior
+   - Create audit report: webpack-config-audit.md
+
+2. RESEARCH ANGULAR 17 EQUIVALENTS
+   - Research ESBuild configuration options in Angular 17
+   - Identify which webpack features have direct ESBuild equivalents
+   - Identify which features need alternative approaches
+   - Document any gaps or limitations
+   - Create equivalence mapping: webpack-to-esbuild-mapping.md
+
+3. IMPLEMENT EQUIVALENT CONFIGURATION
+   For each webpack customization, implement Angular 17 equivalent:
+
+   a) CA Certificate Injection:
+      - Option 1: Container-level certificate management (Dockerfile)
+      - Option 2: Build script that embeds certificates
+      - Option 3: Runtime certificate configuration
+      - Document trade-offs and recommendation
+
+   b) Build-Time Secret Injection:
+      - Modify src/app/config/build-config.ts to use Angular environment system
+      - Create build script to inject secrets during CI/CD
+      - Ensure secrets are not in source control
+      - Verify secrets available at runtime
+
+   c) Custom Module Resolution:
+      - Update tsconfig.json paths for internal packages
+      - Update package.json to point to internal registry
+      - Test that imports resolve correctly
+
+   d) Custom Loaders:
+      - Identify if ESBuild plugins can replace webpack loaders
+      - If not, create pre-build transformation script
+      - Test that legacy code still works
+
+4. CREATE BUILD VERIFICATION SCRIPT
+   Create scripts/verify-build-equivalence.sh that:
+   - Builds with Angular 14 + custom webpack
+   - Builds with Angular 17 + new configuration
+   - Compares build outputs:
+     * Bundle sizes (should be similar)
+     * Embedded certificates (must be present)
+     * Injected environment variables (must match)
+     * Module resolution (imports must resolve)
+   - Reports any differences
+   - Exits with error if not equivalent
+
+5. CREATE RUNTIME VERIFICATION TESTS
+   Create e2e tests that verify:
+   - Internal API calls succeed (certificate validation works)
+   - Build config values are defined (not undefined)
+   - API keys are available
+   - Service URLs are correct
+   - Custom module aliases resolve
+   - Tests must pass in Angular 14 AND Angular 17
+
+6. MIGRATION PLAN DOCUMENT
+   Create MIGRATION-PLAN.md with:
+   - Pre-migration checklist
+   - Step-by-step migration instructions
+   - Rollback procedures
+   - Verification steps
+   - Risk assessment
+   - Success criteria
+
+7. EXECUTE MIGRATION (only after verification passes)
+   - Implement all equivalent configurations
+   - Run verification scripts
+   - If verification passes, proceed with ng update
+   - Re-run verification after migration
+   - Document any issues encountered
+
+VERIFICATION REQUIREMENTS:
+
+BEFORE starting Angular migration:
+✓ All webpack customizations documented
+✓ Equivalent configurations implemented
+✓ Build verification script passes
+✓ Runtime verification tests pass
+✓ Side-by-side comparison shows equivalence
+✓ Stakeholder approval obtained
+
+AFTER Angular migration:
+✓ Build succeeds with new configuration
+✓ Build verification script still passes
+✓ Runtime verification tests still pass
+✓ Manual testing in staging environment
+✓ Production smoke tests planned
+
+CONSTRAINTS:
+- No secrets in source code or committed files
+- Build must succeed reproducibly in CI/CD
+- Production deployment must work with zero manual intervention
+- Certificate validation must work in production environment
+- All functionality must be preserved (no regressions)
+
+RED FLAGS TO WATCH FOR:
+- Build succeeds but outputs look different
+- Environment variables undefined at runtime
+- Certificate errors in API calls
+- Module resolution errors
+- Missing build metadata
+- Tests pass but manual testing fails
+
+SUCCESS CRITERIA:
+1. Build artifacts functionally equivalent (verified programmatically)
+2. Runtime behavior identical (verified with tests)
+3. All internal API calls succeed (certificate validation works)
+4. All build-injected values present (no undefined)
+5. Migration completed with zero production issues
+
+TESTING CHECKLIST:
+After migration, verify:
+□ Application loads successfully
+□ Build config validation passes (no errors in console)
+□ Internal API call succeeds (with HTTPS + CA cert)
+□ Analytics initializes (API key present)
+□ Maps load correctly (API key present)
+□ Authentication flow works (service URL correct)
+□ Data fetching works (service URL correct)
+□ Build metadata present (build number, commit, timestamp)
+□ No console errors about undefined values
+□ No certificate verification errors
+
+ARCHITECTURAL CONSIDERATIONS:
+- Build-time injection vs runtime configuration
+- Container-level vs application-level certificate management
+- CI/CD integration points
+- Environment-specific configurations
+- Secrets management strategy
+- Rollback procedures
+
+OUTPUT FORMAT:
+Provide step-by-step progress updates:
+1. "Auditing current webpack configuration..."
+2. "Researching Angular 17 equivalents..."
+3. "Implementing equivalent configuration for [feature]..."
+4. "Testing equivalence..."
+5. "Verification results: [PASS/FAIL with details]"
+
+If verification fails:
+- Stop immediately
+- Document the failure
+- Propose solution
+- Do NOT proceed with migration until equivalence verified
+
+IMPORTANT NOTES:
+- This is NOT a "just run ng update" task
+- Silent failures are worse than loud failures
+- Build success does not mean application works
+- Production is not the place to discover config issues
+- When in doubt, verify again
+
+The goal is not just to migrate Angular versions, but to preserve critical production functionality through rigorous equivalence testing.
+
+Begin by auditing the current webpack configuration and documenting what needs to be preserved.

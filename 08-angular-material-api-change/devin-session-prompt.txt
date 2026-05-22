@@ -1,0 +1,163 @@
+TASK: Angular Material API Audit and Migration Plan
+
+CONTEXT:
+We need to upgrade from Angular Material 14.2.0 to Material 15.2.0 in our banking application. A previous migration attempt failed because breaking changes were discovered reactively during QA testing, leading to a rollback after 3 hours of wasted effort.
+
+The application uses Angular Material extensively for forms, tables, and dialogs. We need a comprehensive audit of ALL Material API usage before attempting the upgrade again.
+
+OBJECTIVE:
+Perform a systematic audit of the entire codebase to identify every instance of deprecated or changed Material APIs. Create a detailed migration plan with file-level changes required.
+
+SPECIFIC TASKS:
+
+1. API USAGE AUDIT
+
+Search the codebase for the following deprecated patterns and document EVERY occurrence:
+
+a) MatFormField appearance="legacy"
+   - Search pattern: appearance="legacy"
+   - Expected locations: Form components, input fields
+   - Required change: Replace with "fill", "outline", or remove for default
+
+b) Direct MatTableDataSource array assignment
+   - Search pattern: .dataSource = (without 'new MatTableDataSource')
+   - Expected locations: Table components, list views
+   - Required change: Wrap arrays with new MatTableDataSource(data)
+
+c) MatDialog loose typing
+   - Search pattern: dialog.open( (without generic type parameters)
+   - Expected locations: Services, components with dialogs
+   - Required change: Add proper generic types MatDialog.open<Component, Data, Result>
+
+d) Other Material 15 breaking changes
+   - Review Angular Material 15 changelog
+   - Search for any additional deprecated APIs
+   - Document findings
+
+2. IMPACT ANALYSIS
+
+For each pattern found, provide:
+- File path and line number
+- Current code snippet
+- Recommended replacement code
+- Risk level (High/Medium/Low)
+- Affected functionality description
+
+3. MIGRATION PLAN
+
+Create a structured migration plan with:
+
+Phase 1: Low-risk changes (components not customer-facing)
+Phase 2: Medium-risk changes (internal tools, dashboards)
+Phase 3: High-risk changes (customer-facing forms, transactions)
+
+For each phase:
+- List of files to modify
+- Estimated time per file
+- Testing requirements
+- Rollback plan
+
+4. TEST STRATEGY
+
+Define test cases for:
+- Visual regression tests (screenshot comparison)
+- Functional tests (form submission, table filtering, dialog flows)
+- Integration tests (complete user workflows)
+
+5. DELIVERABLES
+
+Provide these artifacts:
+- migration-audit.csv: Complete list of affected files with details
+- migration-plan.md: Step-by-step migration instructions
+- test-checklist.md: Testing requirements before deployment
+- rollback-procedure.md: Quick rollback steps if issues found
+
+CONSTRAINTS:
+
+- DO NOT make any code changes yet - this is audit-only
+- DO NOT skip any files - we need 100% coverage
+- DO NOT assume patterns - search exhaustively
+- DO prioritize by customer impact
+
+CRITICAL REQUIREMENTS:
+
+1. Search the ENTIRE src/ directory recursively
+2. Include component files (.ts), template files (.html), and style files (.scss)
+3. Check for both explicit Material imports and template usage
+4. Verify package.json for Material dependencies
+5. Cross-reference with Material 15 official migration guide
+
+SUCCESS CRITERIA:
+
+- Every deprecated API usage documented
+- Zero surprises during actual migration
+- Clear, actionable migration plan
+- Confidence in deployment safety
+
+EXAMPLE OUTPUT FORMAT:
+
+```
+AUDIT RESULTS:
+
+Pattern: appearance="legacy"
+Total occurrences: 32
+
+1. File: src/app/components/fund-transfer-form.component.ts
+   Line: 45
+   Current: <mat-form-field appearance="legacy">
+   Replacement: <mat-form-field appearance="fill">
+   Risk: HIGH (Customer-facing payment form)
+   Test Required: Visual regression + form submission
+
+2. File: src/app/admin/user-management.component.ts
+   Line: 78
+   Current: <mat-form-field appearance="legacy">
+   Replacement: <mat-form-field appearance="outline">
+   Risk: LOW (Internal admin tool)
+   Test Required: Manual QA
+
+[... continue for all 32 occurrences]
+
+---
+
+Pattern: Direct dataSource assignment
+Total occurrences: 11
+
+[... detailed breakdown]
+
+---
+
+MIGRATION PLAN:
+
+Week 1:
+- Day 1-2: Update all low-risk components (admin tools)
+- Day 3: Deploy to dev, run automated tests
+- Day 4-5: Update medium-risk components (dashboards)
+
+Week 2:
+- Day 1-2: Update high-risk components (payment forms)
+- Day 3: Comprehensive testing in staging
+- Day 4: Production deployment during maintenance window
+- Day 5: Monitoring and hotfix availability
+
+---
+
+TEST CHECKLIST:
+
+[ ] All form fields render correctly in Chrome/Firefox/Safari
+[ ] Transaction tables display data properly
+[ ] Sorting and filtering work on all tables
+[ ] Dialog confirmations behave correctly
+[ ] Payment form submission successful
+[ ] Account deletion requires confirmation
+[ ] Visual regression tests pass (0 pixel differences)
+```
+
+NOTES:
+
+- This is a critical banking application - accuracy is more important than speed
+- Previous migration failed due to incomplete analysis - be thorough
+- Customer trust depends on UI working perfectly
+- Budget 2 full days for this audit, don't rush
+
+START WITH: Reading the Angular Material 15 changelog and migration guide to understand all breaking changes, then systematically search the codebase.

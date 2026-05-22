@@ -1,0 +1,20 @@
+{
+  "/api": {
+    "target": "https://api.internal.company.com",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  },
+  "/auth": {
+    "target": "https://auth.internal.company.com",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  },
+  "/data": {
+    "target": "https://data.internal.company.com",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}

@@ -1,0 +1,230 @@
+TASK: Auth-Critical File Review Before Angular 20 Standalone Migration
+
+CONTEXT:
+We are planning to migrate our consumer banking application from Angular 14 (NgModule-based) to Angular 20 (standalone components). This migration will fundamentally change how services, interceptors, and providers are registered.
+
+Before proceeding with ANY migration work, we need a comprehensive security review of all authentication-critical files to ensure no security controls are lost during migration.
+
+PLAYBOOK REQUIREMENT:
+This task is mandated by Playbook Rule 7.1 - Auth-Critical File Review Gate.
+
+Any file matching these patterns is classified as auth-critical:
+- Interceptors that inject Authorization, X-Session-Token, or X-MFA-Token headers
+- Auth guards that control route access
+- Services that manage authentication state (login, logout, token refresh)
+
+The rule requires:
+1. Complete inventory of all auth-critical files
+2. Documentation of how each auth control is currently registered
+3. Security team review and approval BEFORE any code changes
+4. Migration plan with integration tests to verify auth controls remain active
+
+YOUR TASKS:
+
+## Task 1: Inventory All HTTP Interceptors
+
+Search the codebase for all HTTP interceptors:
+
+1. Find all classes that implement `HttpInterceptor` interface
+2. For each interceptor, document:
+   - File path
+   - What headers it injects (if any)
+   - What security controls it implements
+   - Where it is registered (which modules provide it via HTTP_INTERCEPTORS token)
+   - Whether it is auth-critical
+
+Expected output format:
+```
+INTERCEPTOR INVENTORY:
+
+1. SsoTokenInterceptor
+   - Path: src/app/interceptors/sso-token.interceptor.ts
+   - Headers: Authorization: Bearer <token>
+   - Security control: Attaches SSO authentication token to ALL API requests
+   - Registered in: AppModule (HTTP_INTERCEPTORS multi-provider)
+   - Auth-critical: YES - P0 BLOCKING
+   - Dependencies: AuthService.getToken()
+   - Current test coverage: Unit tests only (mocked HttpClient)
+   - Missing: Integration test verifying header attachment in real HTTP flow
+
+2. [Continue for each interceptor found...]
+```
+
+## Task 2: Assess Migration Risk
+
+For each auth-critical interceptor, answer:
+
+1. **What happens if this interceptor stops running after migration?**
+   - Example: "All API calls will reach backend without Authentication header, causing 401 errors"
+
+2. **Will the application fail immediately or silently?**
+   - Example: "Silent failure - app compiles and boots normally, but API calls fail"
+
+3. **How will we detect if this interceptor is not running?**
+   - Example: "Integration test that verifies Authorization header is present in HttpTestingController"
+
+4. **What is the blast radius if this fails in production?**
+   - Example: "Complete application outage - all authenticated API calls fail"
+
+## Task 3: Identify Current Test Gaps
+
+Review existing tests for each auth-critical interceptor:
+
+1. Do we have unit tests for the interceptor logic? (YES/NO)
+2. Do we have integration tests that verify the interceptor is actually registered and runs on real HTTP calls? (YES/NO)
+3. Do we have E2E tests that verify auth headers in network calls? (YES/NO)
+
+Expected output:
+```
+TEST COVERAGE ANALYSIS:
+
+SsoTokenInterceptor:
+- Unit tests: YES (src/app/interceptors/sso-token.interceptor.spec.ts)
+  - Tests interceptor logic in isolation
+  - Mocks AuthService and HttpHandler
+  - LIMITATION: Does not verify interceptor is registered in DI tree
+
+- Integration tests: NO ❌ BLOCKING
+  - MISSING: Test that configures real HttpClient with interceptor provider
+  - MISSING: Test that makes actual HTTP call and verifies header attachment
+
+- E2E tests: NO ❌ BLOCKING
+  - MISSING: Test that logs in and inspects network tab for Authorization header
+
+RECOMMENDATION: Create integration and E2E tests BEFORE migration.
+```
+
+## Task 4: Document Current Registration Pattern
+
+For each auth-critical interceptor, document exactly how it is currently registered:
+
+```
+CURRENT REGISTRATION (Angular 14, NgModule):
+
+File: src/app/app.module.ts
+
+@NgModule({
+  providers: [
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: SsoTokenInterceptor,
+      multi: true
+    },
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: MfaInterceptor,
+      multi: true
+    }
+  ]
+})
+export class AppModule { }
+
+This registration pattern:
+- Uses HTTP_INTERCEPTORS multi-provider token
+- Runs when HttpClientModule is imported
+- Executes interceptors on EVERY HTTP request
+- Order: SsoTokenInterceptor → MfaInterceptor
+```
+
+## Task 5: Create Security Review Document
+
+Create a document for security team review: `auth-critical-migration-plan.md`
+
+Include:
+1. Complete list of all auth-critical files
+2. Risk assessment for each file
+3. Current test coverage gaps
+4. Proposed migration approach (see README.md for options)
+5. Test plan to verify auth controls work after migration
+6. Rollback plan if issues are detected
+
+## Task 6: Flag Blocking Issues
+
+If you find any of the following, FLAG as BLOCKING and stop work:
+
+❌ BLOCKING: Auth-critical interceptor with no integration tests
+❌ BLOCKING: Auth-critical interceptor not registered in any module
+❌ BLOCKING: Multiple modules registering the same interceptor (potential ordering issue)
+❌ BLOCKING: Interceptor depends on service that may not be available in standalone bootstrap
+
+Example output:
+```
+⚠️ BLOCKING ISSUE FOUND:
+
+Issue: SsoTokenInterceptor has no integration tests
+Risk: Cannot verify interceptor continues to work after standalone migration
+Impact: If interceptor silently stops working, all API calls will fail authentication
+Resolution: Must create integration test BEFORE proceeding with migration
+
+Issue: MfaInterceptor depends on AuthService which is providedIn: 'root'
+Risk: Low - Service will be available in standalone bootstrap
+Impact: None expected
+Resolution: None needed, but verify after migration
+```
+
+## Task 7: Create Integration Test Template
+
+Create integration test files for each auth-critical interceptor:
+
+File: `src/app/interceptors/sso-token.interceptor.integration.spec.ts`
+
+The test should:
+1. Configure TestBed with provideHttpClient(withInterceptorsFromDi())
+2. Register the interceptor via HTTP_INTERCEPTORS token
+3. Inject real HttpClient and HttpTestingController
+4. Make HTTP call via HttpClient
+5. Verify Authorization header is present in HttpTestingController request
+
+This test will serve as:
+- Proof that interceptor works in Angular 14
+- Regression test after migration to Angular 20
+- Template for future interceptor tests
+
+## IMPORTANT CONSTRAINTS:
+
+1. **DO NOT make any code changes** - This is a review task only
+2. **DO NOT run migration schematics** - No ng generate commands
+3. **DO NOT modify interceptor registration** - Document only
+4. **DO NOT skip any auth-critical files** - Complete inventory required
+5. **DO NOT proceed to implementation** - Security team must approve plan first
+
+## SUCCESS CRITERIA:
+
+- [ ] Complete inventory of all HTTP interceptors
+- [ ] Risk assessment for each auth-critical interceptor
+- [ ] Documentation of current registration patterns
+- [ ] Test coverage gap analysis
+- [ ] Integration test templates created (but not implemented yet)
+- [ ] Security review document created for team approval
+- [ ] All blocking issues flagged
+
+## OUTPUT FORMAT:
+
+Create file: `auth-critical-migration-plan.md` with all findings.
+
+The document should be comprehensive enough for the security team to:
+1. Understand all auth-critical components in the system
+2. Assess the risk of the standalone migration
+3. Approve or reject the proposed migration approach
+4. Understand what tests will verify auth controls remain active
+5. Know what to verify in manual QA after deployment
+
+## HUMAN GATE:
+
+After completing this task:
+1. Share `auth-critical-migration-plan.md` with security team
+2. Schedule review meeting to discuss findings
+3. Wait for explicit security team approval before proceeding
+4. Security team will choose migration approach (Option A or B from README.md)
+5. Only after approval: Create PR with integration tests
+6. Only after tests pass: Create implementation PR
+
+**DO NOT PROCEED WITH MIGRATION UNTIL SECURITY TEAM APPROVES THIS PLAN.**
+
+---
+
+END OF TASK PROMPT
+
+This task is estimated to take 2-3 hours for a comprehensive review.
+The goal is to prevent a production security incident by ensuring all
+auth controls are preserved during the standalone migration.
