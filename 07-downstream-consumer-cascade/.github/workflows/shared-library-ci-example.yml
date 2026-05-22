@@ -1,0 +1,230 @@
+name: Shared Library Downstream Consumer Tests
+
+# This workflow demonstrates the CORRECT approach to testing shared library changes
+# It runs downstream consumer tests BEFORE allowing PR merge
+
+on:
+  pull_request:
+    paths:
+      - 'src/libs/shared-ui/**'
+      - '.github/workflows/shared-library-ci-example.yml'
+
+jobs:
+  # Step 1: Build the shared library from the PR branch
+  build-shared-library:
+    runs-on: ubuntu-latest
+    name: Build @bank/shared-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared library
+        run: |
+          cd src/libs/shared-ui
+          npm run build
+
+      - name: Run library unit tests
+        run: |
+          cd src/libs/shared-ui
+          npm test -- --watch=false --browsers=ChromeHeadless
+
+      - name: Upload library build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-ui-dist
+          path: src/libs/shared-ui/dist
+          retention-days: 1
+
+  # Step 2: Test each downstream consumer with the PR version of the library
+  test-downstream-consumers:
+    runs-on: ubuntu-latest
+    needs: build-shared-library
+    strategy:
+      # Don't cancel other jobs if one fails - we want to see all failures
+      fail-fast: false
+      matrix:
+        app:
+          - name: consumer-banking
+            path: src/apps/consumer-banking
+            team: Retail Banking Engineering
+            users: 14.2M
+          - name: business-banking
+            path: src/apps/business-banking
+            team: Commercial Banking Engineering
+            users: 2.8M
+          - name: wealth-management
+            path: src/apps/wealth-management
+            team: Wealth Management Engineering
+            users: 890K
+
+    name: Test ${{ matrix.app.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Download shared library build
+        uses: actions/download-artifact@v4
+        with:
+          name: shared-ui-dist
+          path: src/libs/shared-ui/dist
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Link local shared library
+        run: |
+          cd src/libs/shared-ui
+          npm link
+          cd ../../../${{ matrix.app.path }}
+          npm link @bank/shared-ui
+
+      - name: Build consumer application
+        id: build
+        run: |
+          cd ${{ matrix.app.path }}
+          npm run build
+        continue-on-error: true
+
+      - name: Run consumer tests
+        id: test
+        if: steps.build.outcome == 'success'
+        run: |
+          cd ${{ matrix.app.path }}
+          npm test -- --watch=false --browsers=ChromeHeadless
+        continue-on-error: true
+
+      - name: Report failure details
+        if: steps.build.outcome == 'failure' || steps.test.outcome == 'failure'
+        run: |
+          echo "::error::${{ matrix.app.name }} failed with the PR changes"
+          echo "Team: ${{ matrix.app.team }}"
+          echo "Impact: ${{ matrix.app.users }} monthly active users"
+          exit 1
+
+  # Step 3: Gate PR merge on downstream test results
+  downstream-gate:
+    runs-on: ubuntu-latest
+    needs: test-downstream-consumers
+    name: Downstream Consumer Gate
+    if: always()
+
+    steps:
+      - name: Check downstream test results
+        run: |
+          if [ "${{ needs.test-downstream-consumers.result }}" != "success" ]; then
+            echo "::error::Downstream consumer tests failed. PR cannot be merged."
+            echo ""
+            echo "This PR introduces changes that break one or more consuming applications."
+            echo ""
+            echo "Required actions:"
+            echo "1. Review the test failures above to see which apps are affected"
+            echo "2. Choose a migration strategy:"
+            echo "   - Option A: Revert the breaking change"
+            echo "   - Option B: Implement a compatibility shim (non-breaking)"
+            echo "   - Option C: Coordinate simultaneous migration with affected teams"
+            echo ""
+            echo "See docs/SHARED-LIBRARY-TESTING-STRATEGY.md for guidance."
+            exit 1
+          fi
+          echo "✅ All downstream consumers passed. PR can be merged."
+
+  # Step 4: Post PR comment with results
+  comment-on-pr:
+    runs-on: ubuntu-latest
+    needs: [test-downstream-consumers]
+    if: always() && github.event_name == 'pull_request'
+
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Post failure comment
+        if: needs.test-downstream-consumers.result == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## ❌ Downstream Consumer Tests Failed
+
+            This PR introduces breaking changes that cause build or test failures in consuming applications.
+
+            ### Impact
+            One or more applications that depend on \`@bank/shared-ui\` failed to build or test with your changes.
+
+            ### Affected Applications
+            Review the workflow run to see which applications failed:
+            - Consumer Banking App (14.2M users)
+            - Business Banking App (2.8M users)
+            - Wealth Management App (890K users)
+
+            ### Required Actions
+
+            You have three options:
+
+            **Option A: Revert Breaking Change**
+            If the breaking change is not necessary, revert it to keep the PR non-breaking.
+
+            **Option B: Implement Compatibility Shim**
+            Add the new functionality without breaking existing APIs:
+            - Keep existing interface
+            - Add new interface with extended functionality
+            - Component accepts both interfaces
+            - See \`templates/SHARED-LIBRARY-BREAKING-CHANGE.md\` for examples
+
+            **Option C: Coordinate Simultaneous Migration**
+            If the breaking change is necessary:
+            1. Increment library version to next major (v3.0.0)
+            2. Create migration PRs for all affected applications
+            3. Create migration guide document
+            4. Coordinate merge timing with affected teams
+            5. All PRs (library + consumers) merge together
+
+            ### Resources
+            - [Shared Library Testing Strategy](../docs/SHARED-LIBRARY-TESTING-STRATEGY.md)
+            - [Breaking Change Template](../templates/SHARED-LIBRARY-BREAKING-CHANGE.md)
+            - [Migration Attempt Example](../MIGRATION-ATTEMPT.md)
+
+            **This PR is BLOCKED from merging until downstream consumers pass.**`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Post success comment
+        if: needs.test-downstream-consumers.result == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## ✅ Downstream Consumer Tests Passed
+
+            All applications that depend on \`@bank/shared-ui\` successfully built and tested with your changes.
+
+            ### Tested Applications
+            - ✅ Consumer Banking App (14.2M users)
+            - ✅ Business Banking App (2.8M users)
+            - ✅ Wealth Management App (890K users)
+
+            This PR is safe to merge from a downstream compatibility perspective.`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

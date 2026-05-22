@@ -1,0 +1,162 @@
+TASK: Implement Downstream Consumer Testing for Shared Library Changes
+
+CONTEXT:
+You are working on a monorepo containing a shared UI component library (@bank/shared-ui) that is consumed by three applications: Consumer Banking, Business Banking, and Wealth Management. During the Angular 20 migration, we need to ensure that ANY changes to shared library interfaces do not break downstream consumers.
+
+CURRENT STATE:
+- Shared library: src/libs/shared-ui/ (v2.4.0)
+  - Exports AccountCardComponent and AccountCardData interface
+  - Used by 3 consuming applications
+
+- Consuming applications:
+  - src/apps/consumer-banking/ (uses @bank/shared-ui ^2.4.0)
+    - Team: Retail Banking Engineering (12 engineers)
+    - Users: 14.2M monthly active
+    - Critical component: account-card-display.component.ts
+
+  - src/apps/business-banking/ (uses @bank/shared-ui ^2.4.0)
+    - Team: Commercial Banking Engineering (8 engineers)
+    - Users: 2.8M monthly active
+    - Critical component: business-account-overview.component.ts
+
+  - src/apps/wealth-management/ (uses @bank/shared-ui ^2.3.0 - ONE VERSION BEHIND)
+    - Team: Wealth Management Engineering (6 engineers)
+    - Users: 890K monthly active
+    - Critical component: client-accounts.component.ts
+
+PROBLEM:
+Developers can currently modify the AccountCardData interface in the shared library, see library tests pass, and merge changes WITHOUT knowing if those changes break downstream consumers. This creates cascading build failures across multiple teams.
+
+YOUR TASK:
+
+1. DEPENDENCY GRAPH ANALYSIS
+   Scan the monorepo and document:
+   - All applications that depend on @bank/shared-ui
+   - Which version each application is using
+   - Which components/interfaces from the library each application uses
+   - Team ownership and criticality level
+
+   Output: Create a file `DEPENDENCY-MAP.md` with a complete dependency graph.
+
+2. BREAKING CHANGE DETECTION
+   Analyze the current codebase and identify patterns that would break if the AccountCardData interface changes:
+
+   Expected interface change to test against:
+   ```typescript
+   // CURRENT (v2.4.0)
+   export interface AccountCardData {
+     accountType: 'checking' | 'savings';
+     lastTransaction: Date;  // Required
+   }
+
+   // PROPOSED (v3.0.0 - would be breaking)
+   export interface AccountCardData {
+     accountType: 'checking' | 'savings' | 'money-market' | 'investment';
+     lastTransaction?: Date;  // Made optional
+   }
+   ```
+
+   For each consuming application, identify:
+   - Which methods assume lastTransaction is always defined
+   - Which methods use exhaustive type checking on accountType
+   - Exact line numbers that would break
+   - Specific TypeScript error messages that would occur
+
+   Output: Create file `BREAKING-CHANGE-ANALYSIS.md` with detailed findings.
+
+3. CI CONFIGURATION
+   Create a GitHub Actions workflow file that implements downstream consumer testing:
+
+   Requirements:
+   - Trigger on any PR that modifies src/libs/shared-ui/**
+   - Build the shared library from the PR branch
+   - For EACH consuming application:
+     - Install dependencies
+     - Link the PR version of @bank/shared-ui (not the published version)
+     - Run `npm run build`
+     - Run `npm test`
+   - If ANY consumer build or test fails, block the PR from merging
+   - Post a comment on the PR with:
+     - Which consumers failed
+     - Specific error messages
+     - Required actions (revert, compatibility shim, or coordinate migration)
+
+   Output: Create file `.github/workflows/shared-library-downstream-tests.yml`
+
+4. DEPENDENCY LINK SCRIPT
+   Create a script that can link the local version of @bank/shared-ui to all consuming applications for local testing:
+
+   ```bash
+   # Usage: ./scripts/link-shared-library.sh
+   # Should:
+   # 1. Build @bank/shared-ui
+   # 2. Create npm link for the library
+   # 3. Link it into all consuming apps
+   # 4. Rebuild consuming apps
+   ```
+
+   Output: Create file `scripts/link-shared-library.sh` with executable permissions.
+
+5. MIGRATION GUIDE TEMPLATE
+   Create a template that developers must fill out when making breaking changes to shared libraries:
+
+   Should include sections for:
+   - What changed (before/after code comparison)
+   - Why the change is breaking
+   - Which consumers are affected
+   - Migration steps for each consumer
+   - Compatibility shim option (if applicable)
+   - Rollout timeline
+
+   Output: Create file `templates/SHARED-LIBRARY-BREAKING-CHANGE.md`
+
+6. TESTING STRATEGY DOCUMENT
+   Document the complete testing strategy for shared library changes:
+
+   Should cover:
+   - When downstream testing is required
+   - How to test locally before opening PR
+   - What to do if downstream tests fail
+   - Semantic versioning rules (when to bump major/minor/patch)
+   - Coordination process for breaking changes
+   - Compatibility shim patterns
+
+   Output: Create file `docs/SHARED-LIBRARY-TESTING-STRATEGY.md`
+
+SUCCESS CRITERIA:
+- Dependency graph clearly shows all consumers and versions
+- Breaking change analysis identifies all actual breakage points with line numbers
+- CI workflow successfully catches breaking changes before merge
+- Link script allows developers to test locally before opening PR
+- Migration guide template is comprehensive and actionable
+- Testing strategy document provides clear process for all scenarios
+
+CONSTRAINTS:
+- Do not modify the actual source code in src/libs or src/apps
+- Focus on testing infrastructure and documentation
+- CI workflow must complete in under 15 minutes
+- Scripts must work on both macOS and Linux
+- All documentation must be clear enough for junior developers
+
+DELIVERABLES:
+1. DEPENDENCY-MAP.md - Complete dependency graph
+2. BREAKING-CHANGE-ANALYSIS.md - Detailed analysis of what would break
+3. .github/workflows/shared-library-downstream-tests.yml - CI workflow
+4. scripts/link-shared-library.sh - Local testing script
+5. templates/SHARED-LIBRARY-BREAKING-CHANGE.md - Migration guide template
+6. docs/SHARED-LIBRARY-TESTING-STRATEGY.md - Testing strategy
+
+PRIORITY: HIGH
+This task is blocking the Angular 20 migration. We need downstream consumer testing in place before any further shared library modifications.
+
+REFERENCE MATERIALS:
+- See MIGRATION-ATTEMPT.md for detailed example of what went wrong without this testing
+- See README.md for full context on the scenario and playbook rule 11.2
+- Examine the actual consuming components to understand the breaking change patterns
+
+TIME ESTIMATE: 4-6 hours
+
+START DATE: 2026-05-20
+DUE DATE: 2026-05-21
+
+If you have any questions about the requirements or need clarification on the expected breaking changes, please ask before proceeding.

@@ -1,0 +1,96 @@
+TASK: Pre-Migration Architecture Inventory for Angular 14→20 Upgrade
+
+CONTEXT:
+We are planning to migrate this Angular 14 codebase to Angular 20. Angular 20 deprecates NgModule patterns and recommends standalone components. However, our codebase uses SharedBankingModule which provides services in its providers array (not providedIn: 'root'). Converting components to standalone without addressing service scoping will break singleton behavior across lazy-loaded module boundaries.
+
+YOUR TASK:
+Produce an architecture inventory report BEFORE any code changes are made. Do NOT write any migration code yet.
+
+DELIVERABLES:
+
+1. SERVICE SCOPING INVENTORY
+   Scan all @NgModule decorators in the codebase and identify:
+   - All services provided in module providers arrays (not using providedIn: 'root')
+   - For each such service:
+     * List all files that inject this service (search for constructor injections)
+     * Identify which modules import the providing module
+     * Determine if any imports occur across lazy-loaded boundaries (check routing configs for loadChildren)
+
+   Expected format:
+   ```
+   Service: AuthService
+   Provided in: SharedBankingModule (NOT root-scoped)
+   Injection sites: [list of files]
+   Importing modules:
+     - DashboardModule (eager load)
+     - AccountDetailsModule (lazy load via /account-details)
+     - TransfersModule (lazy load via /transfers)
+   Singleton requirement: REQUIRED (authentication state must be shared)
+   Risk level: HIGH (lazy boundaries + authentication-critical)
+   ```
+
+2. LAZY MODULE BOUNDARY MAP
+   Analyze the routing configuration and produce a map of lazy-loaded modules:
+   ```
+   Eager modules: AppModule → DashboardModule
+   Lazy boundaries:
+     - /account-details → AccountDetailsModule
+     - /transfers → TransfersModule
+   ```
+
+3. RISK ASSESSMENT
+   For each service that is:
+   - Provided in a module (not root), AND
+   - Injected across multiple modules, AND
+   - Has at least one lazy-loaded consumer
+
+   Flag as HIGH RISK and explain why converting any component in that module to standalone will break the singleton pattern.
+
+4. MIGRATION PATH RECOMMENDATION
+   For each HIGH RISK service, recommend one of two paths:
+
+   Path A: Convert service to providedIn: 'root' FIRST
+     - Change the service decorator to @Injectable({ providedIn: 'root' })
+     - Remove from module providers array
+     - Add integration test verifying singleton behavior across lazy boundaries
+     - ONLY THEN convert components to standalone
+
+   Path B: Defer standalone conversion
+     - Keep the entire module as NgModule until all consumers can be migrated simultaneously
+     - Convert only leaf components that don't involve shared services
+
+   Include a clear recommendation with justification.
+
+5. TEST GAP ANALYSIS
+   Identify integration tests that SHOULD exist but DON'T:
+   - Tests that navigate across lazy boundaries and verify shared state
+   - Tests that verify AuthService (or other singleton services) maintain the same instance across routes
+   - Tests that verify no multiple instances of critical services are created
+
+ACCEPTANCE CRITERIA:
+- Report includes a complete list of all module-scoped services (if any exist beyond AuthService)
+- Risk assessment clearly identifies which services MUST be converted to root-scoped before component migration
+- Recommendation includes specific file paths and exact code changes needed
+- No code has been changed yet — this is a READ-ONLY analysis phase
+- Output is in markdown format suitable for inclusion in a migration plan document
+
+CRITICAL REQUIREMENTS:
+- Search for constructor parameter injection patterns like `constructor(private authService: AuthService)`
+- Check angular.json or routing files for lazy loading patterns (loadChildren)
+- Do NOT assume that because tests pass, the code is safe to migrate — this inventory exists specifically to catch issues that unit tests don't detect
+
+PLAYBOOK REFERENCE:
+This task fulfills Playbook Rule 3.2 — Singleton Service Integrity: "Before converting any component to standalone, produce an architecture inventory identifying all services provided in NgModule providers arrays and their lazy-loaded dependencies."
+
+BLOCKERS:
+If you discover module-scoped services that are injected across lazy boundaries, flag them as BLOCKING issues that must be resolved before ANY component is converted to standalone. Do not proceed with migration planning until the architecture team has reviewed and approved the service scoping migration path.
+
+---
+
+GOOD vs BAD APPROACH:
+
+❌ BAD: "I see AuthService is used in the codebase. I'll convert AccountSummaryComponent to standalone now."
+
+✅ GOOD: "AuthService is provided in SharedBankingModule (not root). It's injected in 14 components across DashboardModule (eager) and AccountDetailsModule (lazy). Converting any component to standalone while AuthService remains module-scoped will create multiple instances at the lazy boundary, breaking authentication state. RECOMMENDATION: Convert AuthService to providedIn: 'root' first, add integration test verifying singleton behavior, then convert components."
+
+END OF TASK DESCRIPTION

@@ -1,0 +1,292 @@
+TASK: Migrate Karma Test Runner to Web Test Runner for Angular 20 Upgrade
+
+PROJECT: Banking Application Test Suite Migration
+PRIORITY: HIGH
+ESTIMATED EFFORT: 20-40 hours
+
+================================================================================
+BACKGROUND
+================================================================================
+
+Our banking application is currently on Angular 14.2.0 and uses Karma test runner
+for all unit tests. We need to upgrade to Angular 20, but Angular 20 has removed
+Karma support entirely. All tests must be migrated to the new Web Test Runner.
+
+The application has:
+- 40+ test files using async patterns (fakeAsync, tick, flush, waitForAsync)
+- Payment validation service tests with complex timing requirements
+- Transaction list component tests with auto-refresh functionality
+- Authentication guard tests with async session validation
+- Account data service tests with Promise-based operations
+
+All tests currently pass with Karma. They must continue to pass with Web Test Runner.
+
+================================================================================
+CURRENT STATE
+================================================================================
+
+Test Files:
+- src/app/services/payment-validation.service.spec.ts (200+ lines)
+- src/app/services/account-data.service.spec.ts (300+ lines)
+- src/app/components/transaction-list.component.spec.ts (250+ lines)
+- src/app/guards/auth.guard.spec.ts (200+ lines)
+
+Configuration:
+- karma.conf.js (full Karma configuration)
+- package.json (with Karma dependencies)
+
+Test Patterns Used:
+- fakeAsync() and tick() for simulating time passage
+- flush() for completing all pending async operations
+- waitForAsync() for component compilation
+- TestBed configuration for component/service setup
+- Observable-based async operations
+- Promise-based async operations
+- Interval-based operations (auto-refresh)
+
+Coverage Requirements:
+- Statements: 80%
+- Branches: 75%
+- Functions: 80%
+- Lines: 80%
+
+================================================================================
+REQUIREMENTS
+================================================================================
+
+1. REMOVE KARMA COMPLETELY
+   - Delete karma.conf.js
+   - Remove all karma-* packages from package.json
+   - Remove Karma from any documentation
+
+2. SET UP WEB TEST RUNNER
+   - Install required Web Test Runner packages
+   - Create proper configuration file
+   - Configure for Chrome/Chromium (banking app requirement)
+   - Set up headless mode for CI/CD
+
+3. MAINTAIN ALL TESTS
+   - All existing tests must continue to pass
+   - No changes to test logic unless absolutely necessary
+   - Maintain same level of coverage
+   - Verify all async patterns work correctly
+
+4. COVERAGE REPORTING
+   - Configure coverage reporting for Web Test Runner
+   - Maintain same coverage thresholds (80/75/80/80)
+   - Generate HTML reports for developer review
+   - Generate lcov format for CI/CD integration
+   - Output text-summary to console
+
+5. UPDATE SCRIPTS
+   - Update "test" script in package.json
+   - Create "test:headless" for CI/CD
+   - Create "test:coverage" for coverage reports
+   - Ensure watch mode works for development
+
+6. CI/CD COMPATIBILITY
+   - Tests must run in CI/CD environment
+   - Headless browser mode must work
+   - Exit code must indicate pass/fail correctly
+   - Coverage reports must be generated
+   - No sandbox issues in containerized environments
+
+================================================================================
+SPECIFIC CHALLENGES
+================================================================================
+
+1. TIMING-SENSITIVE TESTS
+
+   Example from auth.guard.spec.ts:
+   ```typescript
+   it('should handle session validation delay', fakeAsync(() => {
+     guard.canActivate(mockRoute, mockState).subscribe(r => result = r);
+     expect(result).toBeUndefined();
+     tick(199);
+     expect(result).toBeUndefined();
+     tick(1);
+     expect(result).toBe(true);
+   }));
+   ```
+
+   Challenge: Verify tick() timing is accurate in Web Test Runner
+
+2. BATCH ASYNC OPERATIONS
+
+   Example from payment-validation.service.spec.ts:
+   ```typescript
+   it('should validate multiple payments', fakeAsync(() => {
+     service.validateBatch(payments).subscribe(r => results = r);
+     flush();
+     expect(results.length).toBe(3);
+     expect(results[0].valid).toBe(true);
+   }));
+   ```
+
+   Challenge: Ensure flush() completes all pending operations correctly
+
+3. INTERVAL-BASED TESTS
+
+   Example from transaction-list.component.spec.ts:
+   ```typescript
+   it('should set up auto-refresh', fakeAsync(() => {
+     fixture.detectChanges();
+     tick(500);
+     tick(30000); // 30-second interval
+     tick(500);
+     expect(component.transactions.length).toBe(initialLoadCount);
+   }));
+   ```
+
+   Challenge: Long intervals must work without timeout issues
+
+4. PROMISE + OBSERVABLE MIX
+
+   Example from account-data.service.spec.ts:
+   ```typescript
+   it('should handle create followed by retrieve', fakeAsync(() => {
+     service.createAccount(data).then(created => {
+       return service.getAccountById(created.id);
+     }).then(retrieved => {
+       retrievedAccount = retrieved;
+     });
+     flush();
+     expect(retrievedAccount.balance).toBe(1200);
+   }));
+   ```
+
+   Challenge: Mixed async patterns must resolve correctly
+
+================================================================================
+DELIVERABLES
+================================================================================
+
+1. CONFIGURATION FILES
+   - Web Test Runner configuration (web-test-runner.config.js or similar)
+   - Updated angular.json if test configuration goes there
+   - Updated package.json with correct dependencies and scripts
+
+2. DOCUMENTATION
+   - Update README.md with new test commands
+   - Document any changes required to test patterns
+   - Create MIGRATION-COMPLETE.md with:
+     * What was changed
+     * Any test modifications needed
+     * How to run tests locally
+     * How to run tests in CI/CD
+     * Troubleshooting guide
+
+3. VERIFICATION
+   - All 40+ test files pass
+   - Coverage meets thresholds (80/75/80/80)
+   - Tests run in watch mode for development
+   - Tests run headless for CI/CD
+   - Coverage reports generate correctly
+
+4. CI/CD UPDATES (if configuration provided)
+   - Update CI/CD scripts to use new test command
+   - Verify tests run in containerized environment
+   - Ensure coverage reports are generated and uploaded
+
+================================================================================
+CONSTRAINTS
+================================================================================
+
+- Cannot modify core application code (only test configuration)
+- Must maintain existing test structure and organization
+- Coverage thresholds are non-negotiable (regulatory requirement)
+- Must work with Chrome/Chromium (banking app browser requirement)
+- CI/CD environment is Ubuntu Linux containers
+- Tests must complete within 5 minutes (CI/CD timeout)
+
+================================================================================
+TESTING CHECKLIST
+================================================================================
+
+After migration, verify:
+
+[ ] All test files execute without errors
+[ ] All test cases pass
+[ ] fakeAsync() works correctly
+[ ] tick() timing is accurate
+[ ] flush() completes all pending operations
+[ ] waitForAsync() works for component compilation
+[ ] TestBed configuration works correctly
+[ ] Observable-based tests pass
+[ ] Promise-based tests pass
+[ ] Interval-based tests pass
+[ ] Coverage meets thresholds
+[ ] HTML coverage report generates
+[ ] lcov coverage report generates
+[ ] Text summary appears in console
+[ ] Watch mode works for development
+[ ] Headless mode works for CI/CD
+[ ] Exit codes are correct (0 for pass, non-zero for fail)
+
+================================================================================
+SUCCESS CRITERIA
+================================================================================
+
+1. ✓ Zero Karma dependencies remain
+2. ✓ All tests pass with Web Test Runner
+3. ✓ Coverage meets or exceeds current thresholds
+4. ✓ Tests can be run locally with `npm test`
+5. ✓ Tests can be run in CI/CD with `npm run test:headless`
+6. ✓ Coverage reports generate with `npm run test:coverage`
+7. ✓ Watch mode works for active development
+8. ✓ Documentation updated and accurate
+9. ✓ No timing-related test failures
+10. ✓ CI/CD pipeline integration verified
+
+================================================================================
+QUESTIONS TO RESOLVE
+================================================================================
+
+If you encounter issues, document:
+
+1. Any test patterns that don't work with Web Test Runner
+2. Any timing differences observed
+3. Any configuration challenges
+4. Any browser/environment compatibility issues
+5. Any coverage reporting differences
+
+================================================================================
+ADDITIONAL CONTEXT
+================================================================================
+
+This is a banking application with strict testing requirements:
+- Tests verify financial transaction logic
+- Async operations simulate real API delays
+- Authentication and authorization must be thoroughly tested
+- Code coverage is a regulatory requirement
+
+The migration must be:
+- Complete (no partial Karma/Web Test Runner mix)
+- Reliable (tests must be deterministic)
+- Fast (CI/CD has time constraints)
+- Maintainable (developers must understand new setup)
+
+================================================================================
+RESOURCES
+================================================================================
+
+Reference these if needed:
+- Angular testing documentation
+- Web Test Runner documentation
+- Example Web Test Runner configurations
+- Angular 20 migration guide
+
+================================================================================
+START HERE
+================================================================================
+
+1. Review all test files to understand patterns used
+2. Research Web Test Runner best practices for Angular
+3. Create minimal working configuration
+4. Run tests and identify failures
+5. Fix configuration/patterns as needed
+6. Verify coverage reporting works
+7. Test CI/CD integration
+8. Document everything
+
+Good luck! This is a critical migration for our Angular 20 upgrade path.

@@ -1,0 +1,25 @@
+{
+  "name": "@bank/shared-ui",
+  "version": "2.4.0",
+  "description": "Shared UI component library for bank applications",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.lib.json",
+    "test": "ng test",
+    "lint": "ng lint"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.0.0",
+    "@angular/core": "^20.0.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^20.0.0",
+    "@angular/cli": "^20.0.0",
+    "@angular/compiler-cli": "^20.0.0",
+    "typescript": "~5.7.0"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  }
+}

@@ -1,0 +1,340 @@
+================================================================================
+DEVIN SESSION PROMPT - Pre-Migration Security Scan
+================================================================================
+
+Task Type: Security Analysis (BLOCKING gate before migration)
+Priority: CRITICAL
+Estimated Time: 2-3 hours
+Dependencies: NONE - Must complete BEFORE any migration work begins
+
+================================================================================
+CONTEXT
+================================================================================
+
+We are preparing to migrate an Angular 14 application to Angular 20. Before
+ANY AI agent (including you) can read the application codebase for migration
+planning, we must verify that no hardcoded credentials exist in the source code.
+
+This is a mandatory security gate per banking regulatory requirements (OCC
+guidance on credential management). Hardcoded credentials in code that is read
+by AI systems constitute a credential exposure event requiring rotation and
+regulatory disclosure.
+
+================================================================================
+YOUR TASK: PRE-MIGRATION SECRETS DETECTION SCAN
+================================================================================
+
+You will run automated secrets detection tools to identify any hardcoded
+credentials in the codebase. You will NOT read or analyze application code
+directly - you will only execute scanning tools and report findings.
+
+IMPORTANT CONSTRAINTS:
+- DO NOT read TypeScript/JavaScript files directly
+- DO NOT analyze application logic or structure
+- DO NOT attempt to fix or remediate any findings
+- DO NOT commit any changes
+- ONLY run scanning tools and document findings
+
+================================================================================
+STEP 1: Run Secrets Detection Tools
+================================================================================
+
+Execute the following scans in sequence:
+
+1.1 Install scanning tools (if not already available):
+```bash
+# Install truffleHog
+pip install truffleHog
+
+# Install git-secrets
+brew install git-secrets  # macOS
+# OR
+apt-get install git-secrets  # Linux
+
+# Install gitleaks
+brew install gitleaks  # macOS
+# OR
+wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz
+tar -xzf gitleaks_8.18.0_linux_x64.tar.gz
+```
+
+1.2 Run truffleHog scan:
+```bash
+cd /path/to/angular-migration-scenarios/06-hardcoded-credentials
+truffleHog filesystem src/ --json --only-verified > truffleHog-report.json
+```
+
+1.3 Run git-secrets scan:
+```bash
+# Initialize git-secrets patterns (if not already configured)
+git secrets --install
+git secrets --register-aws
+git secrets --add-provider -- cat .git-secrets-patterns
+
+# Scan current files
+git secrets --scan src/ > git-secrets-report.txt 2>&1
+```
+
+1.4 Run gitleaks scan:
+```bash
+gitleaks detect --source=. --report-path=gitleaks-report.json --no-git
+```
+
+1.5 Run custom pattern matching for banking-specific credentials:
+```bash
+# Search for common credential patterns
+grep -r -n -E "(api_key|apiKey|API_KEY|secret|Secret|SECRET|password|Password|PASSWORD|token|Token|TOKEN).*=.*['\"]([A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)['\"]" src/ > pattern-search.txt
+
+# Search for Bearer tokens
+grep -r -n "Bearer\s\+[A-Za-z0-9_\.\-]" src/ >> pattern-search.txt
+
+# Search for connection strings
+grep -r -n -E "(postgresql|mysql|mongodb|redis)://[^@]*:[^@]+@" src/ >> pattern-search.txt
+
+# Search for AWS keys
+grep -r -n -E "(AKIA[0-9A-Z]{16})" src/ >> pattern-search.txt
+
+# Search for private keys
+grep -r -n "BEGIN.*PRIVATE KEY" src/ >> pattern-search.txt
+```
+
+================================================================================
+STEP 2: Analyze Findings
+================================================================================
+
+For each tool's output, create a summary report with:
+
+2.1 Total number of potential secrets detected
+2.2 Breakdown by severity (CRITICAL, HIGH, MEDIUM, LOW)
+2.3 Breakdown by credential type:
+    - API keys
+    - Bearer tokens / JWT tokens
+    - Database passwords
+    - Connection strings with embedded credentials
+    - AWS IAM keys
+    - Private keys (RSA, SSH, etc.)
+    - Service account credentials
+    - Third-party API keys
+
+2.4 List of affected files (do NOT include the actual credential values)
+
+2.5 For each finding, determine:
+    - File path and line number
+    - Credential type
+    - Estimated entropy (how likely it's a real secret vs false positive)
+    - First appearance in git history (if available)
+    - Whether it appears to be in current use (based on recent commits)
+
+================================================================================
+STEP 3: Generate Security Report
+================================================================================
+
+Create a file named: SECURITY-SCAN-REPORT.md
+
+Format:
+```markdown
+# Pre-Migration Security Scan Report
+
+**Scan Date:** [Date and time]
+**Tools Used:** truffleHog, git-secrets, gitleaks, custom patterns
+**Scope:** src/ directory (full application code)
+
+## Executive Summary
+
+- Total potential secrets detected: [NUMBER]
+- Critical severity: [NUMBER]
+- High severity: [NUMBER]
+- Medium severity: [NUMBER]
+- Files affected: [NUMBER]
+
+## GATE DECISION
+
+[Choose one:]
+
+✅ PASS - No secrets detected. Codebase is ready for AI agent access.
+
+❌ FAIL - Secrets detected. BLOCKING issues must be resolved before migration.
+
+## Detailed Findings
+
+[For each finding:]
+
+### Finding #[N] - [Credential Type]
+
+- **Severity:** CRITICAL / HIGH / MEDIUM / LOW
+- **File:** [path/to/file.ts]
+- **Line:** [line number]
+- **Pattern Match:** [type of pattern matched, e.g., "API key format"]
+- **Entropy Score:** [0.0 - 5.0]
+- **First Seen:** [commit hash or date, if available]
+- **Status:** LIKELY_LIVE / LIKELY_TEST / UNKNOWN
+- **Description:** [Brief description of what this credential appears to be]
+
+## Recommendations
+
+[If secrets found:]
+
+IMMEDIATE ACTION REQUIRED:
+1. Do NOT proceed with AI agent migration until secrets are remediated
+2. Security team must review all findings
+3. Classify each credential (live vs revoked, test vs production)
+4. For live credentials:
+   - Move to secure vault (AWS Secrets Manager, HashiCorp Vault)
+   - Update code to fetch from vault at runtime
+   - Rotate credentials after remediation
+5. For revoked/test credentials:
+   - Document in security log
+   - Remove from codebase
+6. Add pre-commit hooks to prevent future credential commits
+7. Re-run this scan after remediation
+8. Security sign-off required before proceeding
+
+[If no secrets found:]
+
+The codebase has passed secrets detection. However:
+1. This scan is not 100% foolproof - manual review recommended
+2. Ensure pre-commit hooks are installed to prevent future commits
+3. Document security approval in migration records
+4. Proceed with migration with security team awareness
+
+## Appendix: Scan Tool Outputs
+
+### truffleHog Report
+[Attach or summarize truffleHog-report.json]
+
+### git-secrets Report
+[Attach or summarize git-secrets-report.txt]
+
+### gitleaks Report
+[Attach or summarize gitleaks-report.json]
+
+### Custom Pattern Matches
+[Attach or summarize pattern-search.txt]
+```
+
+================================================================================
+STEP 4: Report Results
+================================================================================
+
+After generating the security report:
+
+4.1 Print summary to console:
+```
+================================
+SECURITY SCAN COMPLETE
+================================
+Status: PASS / FAIL
+Total Secrets: [N]
+Critical: [N]
+High: [N]
+Report: SECURITY-SCAN-REPORT.md
+================================
+```
+
+4.2 If FAIL (secrets detected):
+```
+⛔ MIGRATION BLOCKED ⛔
+
+This codebase contains hardcoded credentials and CANNOT be read by AI agents
+until remediation is complete.
+
+Next steps:
+1. Review SECURITY-SCAN-REPORT.md
+2. Engage security team for remediation planning
+3. Move credentials to secure vault
+4. Rotate all live credentials
+5. Re-run this scan
+6. Obtain security sign-off
+
+Do NOT proceed with migration until this scan shows PASS.
+```
+
+4.3 If PASS (no secrets):
+```
+✅ SECURITY GATE PASSED ✅
+
+No hardcoded credentials detected. This codebase is approved for AI agent access.
+
+Next steps:
+1. Document this security approval
+2. Install pre-commit hooks (git-secrets) to maintain security
+3. Proceed with migration planning
+
+Migration can begin.
+```
+
+================================================================================
+DELIVERABLES
+================================================================================
+
+1. SECURITY-SCAN-REPORT.md - Complete findings report
+2. truffleHog-report.json - Raw tool output
+3. git-secrets-report.txt - Raw tool output
+4. gitleaks-report.json - Raw tool output
+5. pattern-search.txt - Custom pattern search results
+6. Console summary with clear PASS/FAIL gate decision
+
+================================================================================
+SUCCESS CRITERIA
+================================================================================
+
+This task is complete when:
+- ✓ All four scanning tools have been executed
+- ✓ SECURITY-SCAN-REPORT.md has been created
+- ✓ Clear PASS or FAIL decision has been documented
+- ✓ If FAIL: All findings are documented with file paths and line numbers
+- ✓ If PASS: Security approval is documented for migration to proceed
+
+================================================================================
+WHAT NOT TO DO
+================================================================================
+
+❌ Do NOT read application source files directly
+❌ Do NOT analyze application architecture or dependencies
+❌ Do NOT attempt to fix or remove credentials
+❌ Do NOT commit any changes to the repository
+❌ Do NOT proceed to migration planning (that's a separate task after PASS)
+❌ Do NOT include actual credential values in the report (only indicate
+   their presence and location)
+
+================================================================================
+TIME ESTIMATE
+================================================================================
+
+- Tool installation: 15 minutes
+- Running scans: 30 minutes
+- Analyzing results: 60 minutes
+- Generating report: 45 minutes
+- Total: ~2.5 hours
+
+================================================================================
+COMPLIANCE NOTES
+================================================================================
+
+This scan is required under:
+- OCC Bulletin on Cybersecurity Risk Management
+- Bank's internal security policy Section 4.2.1
+- Third-party AI vendor risk assessment requirements
+- PCI-DSS requirements (if payment data is processed)
+
+Failure to complete this scan before AI agent access constitutes a security
+policy violation and regulatory compliance risk.
+
+================================================================================
+QUESTIONS OR ISSUES
+================================================================================
+
+If any of the scanning tools fail or produce unclear results:
+1. Document the error in SECURITY-SCAN-REPORT.md
+2. Mark the gate as FAIL (err on side of caution)
+3. Escalate to security team for manual review
+
+Do not proceed with migration if there is any uncertainty about scan results.
+
+================================================================================
+BEGIN TASK
+================================================================================
+
+Please execute the steps above and generate SECURITY-SCAN-REPORT.md.
+
+Report status when complete.
