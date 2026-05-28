@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { AuthService } from '../auth.service';
 
 @Component({
+  standalone: false,
   selector: 'app-quick-transfer',
   template: `
     <div class="quick-transfer">
