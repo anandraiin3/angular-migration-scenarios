@@ -134,31 +134,16 @@ export class FundTransferComponent {
     this.errorMessage = null;
     this.successMessage = null;
 
-    // ⚠️⚠️⚠️ THIS IS THE DEPRECATED PATTERN ⚠️⚠️⚠️
-    //
-    // THREE-ARGUMENT SUBSCRIBE:
-    // In RxJS 7 (Angular 14): Works correctly
-    // In RxJS 8 (Angular 20): The second argument (error handler) is IGNORED
-    //
-    // This is the exact pattern that causes silent error swallowing.
-    //
-    this.paymentService.submitPayment(this.request).subscribe(
-      // Success handler (first argument)
-      (result) => this.handleSuccess(result),
-
-      // Error handler (second argument) - THIS WILL BE IGNORED IN RXJS 8
-      (error) => this.handlePaymentError(error),
-
-      // Complete handler (third argument)
-      () => this.finalize()
-    );
-
-    // CORRECT PATTERN FOR RXJS 8:
-    // this.paymentService.submitPayment(this.request).subscribe({
-    //   next: (result) => this.handleSuccess(result),
-    //   error: (error) => this.handlePaymentError(error),
-    //   complete: () => this.finalize()
-    // });
+    // Migrated from three-argument subscribe(next, error, complete) to object
+    // syntax for RxJS 8 compatibility. The error handler (handlePaymentError)
+    // must continue to fire on payment failures to display user-facing error
+    // messages (INSUFFICIENT_FUNDS, INVALID_ACCOUNT, LIMIT_EXCEEDED).
+    // See: Playbook Step 11 — manual RxJS migration, human-reviewed.
+    this.paymentService.submitPayment(this.request).subscribe({
+      next: (result) => this.handleSuccess(result),
+      error: (error) => this.handlePaymentError(error),
+      complete: () => this.finalize()
+    });
   }
 
   private handleSuccess(result: PaymentResponse): void {
@@ -169,8 +154,6 @@ export class FundTransferComponent {
   }
 
   private handlePaymentError(error: PaymentError): void {
-    // IN ANGULAR 20 (RXJS 8): THIS METHOD IS NEVER CALLED
-    // The loading spinner will spin forever, no error message appears
     console.error('[FundTransferComponent] Payment error:', error);
     this.isProcessing = false;
     this.errorCode = error.code;
@@ -190,7 +173,10 @@ export class FundTransferComponent {
       memo: ''
     };
     this.errorMessage = null;
+    this.errorCode = null;
+    this.errorDetails = null;
     this.successMessage = null;
+    this.confirmationNumber = null;
     this.isProcessing = false;
   }
 }
