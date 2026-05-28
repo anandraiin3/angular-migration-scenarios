@@ -173,7 +173,10 @@ export class FundTransferComponent {
       memo: ''
     };
     this.errorMessage = null;
+    this.errorCode = null;
+    this.errorDetails = null;
     this.successMessage = null;
+    this.confirmationNumber = null;
     this.isProcessing = false;
   }
 }

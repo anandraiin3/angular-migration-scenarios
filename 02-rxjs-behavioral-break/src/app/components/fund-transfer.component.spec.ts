@@ -180,12 +180,16 @@ describe('FundTransferComponent', () => {
     component.errorCode = 'ERR';
     component.errorDetails = 'Details';
     component.successMessage = 'Success';
+    component.confirmationNumber = 'CONF-XYZ';
     component.isProcessing = true;
 
     component.resetForm();
 
     expect(component.errorMessage).toBeNull();
+    expect(component.errorCode).toBeNull();
+    expect(component.errorDetails).toBeNull();
     expect(component.successMessage).toBeNull();
+    expect(component.confirmationNumber).toBeNull();
     expect(component.isProcessing).toBeFalse();
     expect(component.request.fromAccount).toBe('');
     expect(component.request.amount).toBe(0);
