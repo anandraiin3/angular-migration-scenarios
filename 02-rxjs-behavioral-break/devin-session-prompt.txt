@@ -1,0 +1,181 @@
+TASK: Pre-Migration RxJS Error Handling Audit for Angular 14→20 Upgrade
+
+CONTEXT:
+We are planning to migrate this Angular 14 codebase to Angular 20. Angular 20 bundles RxJS 8, which removes the deprecated three-argument subscribe() pattern (subscribe(next, error, complete)). When this pattern is used in RxJS 7 and migrated to RxJS 8, TypeScript does not produce a compilation error — it silently matches the one-argument overload and ignores the error handler, causing silent error swallowing in production.
+
+This codebase processes payments, and silent error handling failures are P0 incidents that prevent customers from seeing why their payments failed.
+
+PLAYBOOK REQUIREMENT:
+This task is mandated by Playbook Rule 5.3 — RxJS Error Handling Audit.
+
+The rule requires:
+1. Automated scan for deprecated error handling patterns BEFORE any upgrade
+2. Categorization of findings by criticality (P0 Critical, P1 High, P2 Medium)
+3. Human review of remediation plan BEFORE implementation
+4. Integration tests added for all error paths
+5. PR cannot be approved if any three-argument subscribe patterns remain
+
+YOUR TASKS:
+
+## Task 1: Automated RxJS Pattern Scan
+
+Run regex searches across the entire codebase to find deprecated patterns:
+
+1. Search for three-argument subscribe pattern:
+   Regex: `\.subscribe\s*\([^)]+,[^)]+\)`
+   
+2. Search for subscriber.error() calls in custom operators:
+   Regex: `subscriber\.error\s*\(`
+
+3. For each match found, document:
+   - File path and line number
+   - The exact code snippet
+   - What the error handler does (displays user message, logs, retries, etc.)
+   - Whether this is in a payment-critical flow
+
+Expected output format:
+```
+RXJS MIGRATION BLOCKERS:
+
+Pattern 1: Three-argument subscribe()
+File: src/app/components/fund-transfer.component.ts:87
+Code: this.paymentService.submitPayment(this.request).subscribe(
+  (result) => this.handleSuccess(result),
+  (error) => this.handlePaymentError(error),
+  () => this.finalize()
+);
+Error handler behavior: Displays user-facing error messages for payment failures
+Flow type: PAYMENT_PROCESSING
+Criticality: P0 - CRITICAL
+Impact if broken: Customers cannot see payment failure reasons (insufficient funds, invalid account, etc.)
+```
+
+## Task 2: Criticality Categorization
+
+Categorize each finding:
+
+**P0 - CRITICAL:**
+- Payment processing flows
+- Authentication flows  
+- Transaction submission
+- Any flow where error messages are regulatory requirements
+
+**P1 - HIGH:**
+- Account data loading
+- Balance retrieval
+- Transaction history
+- Flows where errors cause user confusion but not regulatory issues
+
+**P2 - MEDIUM:**
+- Non-critical UI updates
+- Analytics tracking
+- Background polling
+- Flows where silent failure has minimal user impact
+
+## Task 3: Remediation Plan
+
+For each flagged pattern, recommend the correct migration:
+
+```typescript
+// BEFORE (RxJS 7, breaks in RxJS 8)
+obs$.subscribe(next, error, complete);
+
+// AFTER (RxJS 8 compatible)
+obs$.subscribe({ next, error, complete });
+```
+
+For patterns using subscriber.error() in custom operators:
+```typescript
+// BEFORE (RxJS 7)
+subscriber.error(error);
+
+// AFTER (RxJS 8 compatible)
+return throwError(() => error);
+```
+
+## Task 4: Test Gap Analysis
+
+For each P0 and P1 finding, identify if integration tests exist for the error path:
+
+1. Does a test exist that mocks error responses? (YES/NO)
+2. Does a test verify error messages display in the UI? (YES/NO)
+3. Does a test verify loading states resolve on error? (YES/NO)
+
+Expected output:
+```
+TEST COVERAGE ANALYSIS:
+
+fund-transfer.component.ts:87 [P0]
+- Error path test: NO ❌ BLOCKING
+  - MISSING: Test that mocks HTTP 400/500 responses
+  - MISSING: Test that verifies errorMessage is displayed
+  - MISSING: Test that verifies isProcessing becomes false on error
+  
+RECOMMENDATION: Add integration test BEFORE converting syntax
+```
+
+## Task 5: Create Migration Plan Document
+
+Create file: `rxjs-migration-plan.md` with:
+
+1. Complete list of all deprecated patterns found
+2. Criticality categorization for each
+3. Recommended code changes for each
+4. Test coverage gaps and required new tests
+5. Implementation order (P0 first, then P1, then P2)
+6. Verification plan after conversion
+
+## Task 6: Flag Blocking Issues
+
+If you find any of the following, FLAG as BLOCKING:
+
+❌ BLOCKING: P0 payment flow with three-argument subscribe and no error path tests
+❌ BLOCKING: P0 auth flow with three-argument subscribe and no error path tests
+❌ BLOCKING: Custom operator using subscriber.error() without equivalent catchError
+
+## IMPORTANT CONSTRAINTS:
+
+1. **DO NOT make any code changes** - This is an audit task only
+2. **DO NOT run ng update** - No migration commands yet
+3. **DO NOT convert subscribe patterns** - Document only
+4. **DO NOT skip any patterns** - Complete inventory required
+5. **DO NOT proceed to implementation** - Human review required first
+
+## SUCCESS CRITERIA:
+
+- [ ] Complete regex scan for both deprecated patterns
+- [ ] All findings documented with file paths and line numbers
+- [ ] Criticality categorization completed for all findings
+- [ ] Test gap analysis completed for P0 and P1 findings
+- [ ] Migration plan document created
+- [ ] All blocking issues flagged
+- [ ] Zero code changes made (read-only analysis)
+
+## OUTPUT FORMAT:
+
+Create file: `rxjs-migration-plan.md` with all findings.
+
+The document should be comprehensive enough for the engineering team to:
+1. Understand all RxJS migration risks
+2. Prioritize which patterns to fix first
+3. Review and approve the remediation approach
+4. Know what tests must be added before implementation
+
+## HUMAN GATE:
+
+After completing this task:
+1. Share `rxjs-migration-plan.md` with tech lead and security team
+2. Schedule review meeting to discuss findings
+3. Wait for explicit approval before proceeding with implementation
+4. Only after approval: Create PR with syntax conversions and new tests
+5. Only after tests pass: Run ng update @angular/core@20
+
+**DO NOT PROCEED WITH NG UPDATE UNTIL ALL RXJS PATTERNS ARE CONVERTED AND TESTED.**
+
+---
+
+END OF TASK PROMPT
+
+This task is estimated to take 1-2 hours for comprehensive audit.
+The goal is to prevent a P0 production incident by ensuring all error handlers
+continue to work after the RxJS 7→8 migration.
